@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -24,6 +24,8 @@ type request struct {
 	Image    string `json:"avatar_url"`
 }
 
+var monkeys [][]string
+
 func Process(w http.ResponseWriter, r *http.Request) {
 	var targetWord word
 
@@ -34,39 +36,20 @@ func Process(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 
+	data, err := os.ReadFile("monkeys.json")
+	if err != nil {
+		log.Println(err)
+	}
+
+	if err := json.Unmarshal(data, &monkeys); err != nil {
+		log.Fatalf("Error unmarshaling assets data: %v", err)
+	}
+
 	go func() {
 		log.Println("the word is", targetWord.Target)
 
-		data, err := os.ReadFile("monkeys.json")
-		if err != nil {
-			log.Println(err)
-		}
-
-		var monkeys [][]string
-
-		if err := json.Unmarshal(data, &monkeys); err != nil {
-			log.Fatalf("Error unmarshaling assets data: %v", err)
-		}
-
-		num := rand.Intn(5)
-		godotenv.Load()
-		webhook := os.Getenv("WEBHOOK")
-		requestContent := request{
-			Content:  fmt.Sprintf("A new string has been recieved. It is **%s**", targetWord.Target),
-			Username: monkeys[num][0],
-			Image:    monkeys[num][1],
-		}
-
-		req, err := json.Marshal(requestContent)
-		if err != nil {
-			log.Println(err)
-		}
-
-		_, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
-
-		if err != nil {
-			log.Println(err)
-		}
+		content := fmt.Sprintf("A new string has been recieved. It is **%s**", targetWord.Target)
+		webhook(content)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -75,10 +58,9 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		workersStr := os.Getenv("WORKERS")
 
 		workers, err := strconv.Atoi(workersStr)
-    if err != nil {
-        log.Fatalf("Error converting WORKERS environment variable to int: %v", err)
-    }
-
+		if err != nil {
+			log.Fatalf("Error converting WORKERS environment variable to int: %v", err)
+		}
 
 		for i := 0; i < workers; i++ {
 			go simulate(ctx, cancel, targetWord.Target, resultChan)
@@ -86,23 +68,10 @@ func Process(w http.ResponseWriter, r *http.Request) {
 
 		res := <-resultChan
 
-		requestContent = request{
-			Content:  fmt.Sprintf("The string has been found! It took %d attempts.", res),
-			Username: monkeys[num][0],
-			Image:    monkeys[num][1],
-		}
+		content = fmt.Sprintf("The string has been found! It took %d attempts.", res)
+		webhook(content)
 
-		req, err = json.Marshal(requestContent)
-		if err != nil {
-			log.Println(err)
-		}
-		_, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
-
-		if err != nil {
-			log.Println(err)
-		}
-
-		log.Println("string found")
+		log.Println("string found in", res, "tries")
 	}()
 }
 
@@ -119,6 +88,9 @@ func simulate(ctx context.Context, cancel context.CancelFunc, target string, res
 			if len(current) >= len(target) || (length >= 0 && current[length] != target[length]) {
 				current = ""
 				count++
+			} else if len(current) >= 7 {
+				content := fmt.Sprintf("The string is almost there! We currently have: %s", current)
+				webhook(content)
 			}
 
 			char := rand.Intn(27) + 97
@@ -134,4 +106,26 @@ func simulate(ctx context.Context, cancel context.CancelFunc, target string, res
 
 	result <- count
 	cancel()
+}
+
+func webhook(message string) {
+	godotenv.Load()
+	webhook := os.Getenv("WEBHOOK")
+	num := rand.Intn(5)
+
+	requestContent := request{
+		Content:  message,
+		Username: monkeys[num][0],
+		Image:    monkeys[num][1],
+	}
+
+	req, err := json.Marshal(requestContent)
+	if err != nil {
+		log.Println(err)
+	}
+	_, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
+
+	if err != nil {
+		log.Println(err)
+	}
 }
