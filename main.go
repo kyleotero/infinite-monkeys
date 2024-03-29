@@ -61,7 +61,7 @@ func Process(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 
-		temp, err := http.Post(webhook, "application/json", strings.NewReader(string(req)))
+		_, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
 
 		if err != nil {
 			log.Println(err)
@@ -89,7 +89,7 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println(err)
 		}
-		temp, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
+		_, err = http.Post(webhook, "application/json", strings.NewReader(string(req)))
 
 		if err != nil {
 			log.Println(err)
