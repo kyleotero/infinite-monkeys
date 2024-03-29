@@ -67,8 +67,6 @@ func Process(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 
-		log.Println(temp.Status)
-
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -96,8 +94,6 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println(err)
 		}
-
-		log.Println(temp.Status)
 	}()
 }
 
