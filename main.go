@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -71,7 +72,13 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 
 		resultChan := make(chan int)
-		workers := 10000
+		workersStr := os.Getenv("WORKERS")
+
+		workers, err := strconv.Atoi(workersStr)
+    if err != nil {
+        log.Fatalf("Error converting WORKERS environment variable to int: %v", err)
+    }
+
 
 		for i := 0; i < workers; i++ {
 			go simulate(ctx, cancel, targetWord.Target, resultChan)
@@ -94,6 +101,8 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println(err)
 		}
+
+		log.Println("string found")
 	}()
 }
 
