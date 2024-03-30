@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"infinite-monkey-theorem/src/benchmark"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -28,6 +30,7 @@ var monkeys [][]string
 
 func Process(w http.ResponseWriter, r *http.Request) {
 	var targetWord word
+	bench := &benchmark.Benchmark{}
 
 	err := json.NewDecoder(r.Body).Decode(&targetWord)
 
@@ -36,7 +39,7 @@ func Process(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 
-	data, err := os.ReadFile("monkeys.json")
+	data, err := os.ReadFile("./monkeys.json")
 	if err != nil {
 		log.Println(err)
 	}
@@ -54,7 +57,7 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		resultChan := make(chan int)
+		resultChan := make(chan int64)
 		workersStr := os.Getenv("WORKERS")
 
 		workers, err := strconv.Atoi(workersStr)
@@ -63,7 +66,7 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for i := 0; i < workers; i++ {
-			go simulate(ctx, cancel, targetWord.Target, resultChan)
+			go simulate(ctx, cancel, targetWord.Target, resultChan, bench)
 		}
 
 		res := <-resultChan
@@ -71,36 +74,47 @@ func Process(w http.ResponseWriter, r *http.Request) {
 		content = fmt.Sprintf("The string has been found! It took %d attempts.", res)
 		webhook(content)
 
+		avgTime := bench.OutputAvg()
+
+		content = fmt.Sprintf("average speed of %f nanoseconds per 1 million combinations, which is %f seconds!", avgTime, avgTime/1000000000)
+		webhook(content)
+
 		log.Println("string found in", res, "tries")
 	}()
 }
 
-func simulate(ctx context.Context, cancel context.CancelFunc, target string, result chan<- int) {
-	count := 0
-	current := ""
-	for current != target {
+func simulate(ctx context.Context, cancel context.CancelFunc, target string, result chan<- int64, bench *benchmark.Benchmark) {
+	ran := rand.New(rand.NewSource(100000))
+	var count int64 = 0
+	var current strings.Builder
+	for current.String() != target {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			length := len(current) - 1
+			if count%1000000 == 0 {
+				now := time.Now()
+				bench.LogTimestamp(now.UnixNano())
+			}
 
-			if len(current) >= len(target) || (length >= 0 && current[length] != target[length]) {
-				current = ""
+			length := current.Len() - 1
+
+			if current.Len() >= len(target) || (length >= 0 && current.String()[length] != target[length]) {
+				current.Reset()
 				count++
-			} else if len(current) >= 7 {
-				content := fmt.Sprintf("The string is almost there! We currently have: %s", current)
+			} else if current.Len() >= 7 {
+				content := fmt.Sprintf("The string is almost there! We currently have: %s, and have tried %d combinatons!", current.String(), count)
 				webhook(content)
 			}
 
-			char := rand.Intn(27) + 97
+			char := ran.Intn(27) + 97
 
 			if char == 123 {
-				current += " "
+				current.WriteRune(' ')
 				continue
 			}
 
-			current += string(rune(char))
+			current.WriteRune(rune(char))
 		}
 	}
 
