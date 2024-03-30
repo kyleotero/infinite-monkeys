@@ -85,8 +85,25 @@ func Process(w http.ResponseWriter, r *http.Request) {
 
 func simulate(ctx context.Context, cancel context.CancelFunc, target string, result chan<- int64, bench *benchmark.Benchmark) {
 	var count int64 = 0
-	var current strings.Builder
-	for current.String() != target {
+	var current int = 0
+	var length int = -1
+	targetInts := []int{}
+
+	for i, char := range target {
+		val := int(char) - 97
+
+		if char == ' ' {
+			val = 26
+		}
+
+		if i > 0 {
+			val += targetInts[i-1]
+		}
+
+		targetInts = append(targetInts, val)
+	}
+
+	for length+1 != len(target) || current != targetInts[len(targetInts)-1] {
 		select {
 		case <-ctx.Done():
 			return
@@ -96,24 +113,24 @@ func simulate(ctx context.Context, cancel context.CancelFunc, target string, res
 				bench.LogTimestamp(now.UnixNano())
 			}
 
-			length := current.Len() - 1
-
-			if current.Len() >= len(target) || (length >= 0 && current.String()[length] != target[length]) {
-				current.Reset()
+			if length >= len(target) || (length >= 0 && current != targetInts[length]) {
+				current = 0
+				length = -1
 				count++
-			} else if current.Len() >= 7 {
-				content := fmt.Sprintf("The string is almost there! We currently have: %s, and have tried %d combinatons!", current.String(), count)
+			} else if length > 7 {
+				content := fmt.Sprintf("The string is almost there! We currently have: %s, and have tried %d combinatons!", target[:length], count)
 				webhook(content)
 			}
 
-			char := rand.Intn(27) + 97
+			char := rand.Intn(27)
+			length++
 
-			if char == 123 {
-				current.WriteRune(' ')
+			if char == 26 {
+				current += 26
 				continue
 			}
 
-			current.WriteRune(rune(char))
+			current += char
 		}
 	}
 
