@@ -84,7 +84,6 @@ func Process(w http.ResponseWriter, r *http.Request) {
 }
 
 func simulate(ctx context.Context, cancel context.CancelFunc, target string, result chan<- int64, bench *benchmark.Benchmark) {
-	ran := rand.New(rand.NewSource(100000))
 	var count int64 = 0
 	var current strings.Builder
 	for current.String() != target {
@@ -107,7 +106,7 @@ func simulate(ctx context.Context, cancel context.CancelFunc, target string, res
 				webhook(content)
 			}
 
-			char := ran.Intn(27) + 97
+			char := rand.Intn(27) + 97
 
 			if char == 123 {
 				current.WriteRune(' ')
@@ -123,7 +122,7 @@ func simulate(ctx context.Context, cancel context.CancelFunc, target string, res
 }
 
 func webhook(message string) {
-	godotenv.Load()
+	godotenv.Load("../../.env")
 	webhook := os.Getenv("WEBHOOK")
 	num := rand.Intn(5)
 
